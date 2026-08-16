@@ -9,6 +9,7 @@ from app.services.bookings_service import (
     create_booking,
     get_booking,
     get_user_bookings,
+    get_all_bookings,
     cancel_booking
 )
 
@@ -17,6 +18,23 @@ router = APIRouter(
     prefix="/bookings",
     tags=["Bookings"]
 )
+
+
+@router.get(
+    "",
+    response_model=list[BookingResponse]
+)
+def get_all(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Only admins can view all bookings
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Only admins can view all bookings"
+        )
+    return get_all_bookings(db)
 
 
 @router.post(

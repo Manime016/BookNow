@@ -146,6 +146,7 @@ def update_price(
 
 def generate(
     event_id: int,
+    price: float | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -158,7 +159,8 @@ def generate(
     try:
         created_count = generate_event_seats(
             db,
-            event_id
+            event_id,
+            price
         )
 
         return {

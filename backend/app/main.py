@@ -1,6 +1,8 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.auth import router as auth_router
+from app.db import initialize_database
 from app.routes.venues import router as venue_router
 from app.routes.events import router as event_router
 from app.routes.seats import router as seat_router
@@ -14,15 +16,28 @@ app = FastAPI(
     version="1.0.0"
 )
 
+@app.on_event("startup")
+def initialise_database_on_startup():
+    initialize_database()
 
-app.include_router(auth_router)
-app.include_router(venue_router)
-app.include_router(event_router)
-app.include_router(seat_router)
-app.include_router(event_seat_router)
-app.include_router(seat_lock_router)
-app.include_router(booking_router)
-app.include_router(payment_router)
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins like ["https://yourdomain.com"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers with /api prefix
+app.include_router(auth_router, prefix="/api")
+app.include_router(venue_router, prefix="/api")
+app.include_router(event_router, prefix="/api")
+app.include_router(seat_router, prefix="/api")
+app.include_router(event_seat_router, prefix="/api")
+app.include_router(seat_lock_router, prefix="/api")
+app.include_router(booking_router, prefix="/api")
+app.include_router(payment_router, prefix="/api")
 
 @app.get("/")
 def root():

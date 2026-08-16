@@ -34,9 +34,9 @@ class Booking(Base):
     )
 
     booking_status = Column(
-        Enum("CONFIRMED", "CANCELLED"),
+        Enum("PENDING_PAYMENT", "CONFIRMED", "CANCELLED"),
         nullable=False,
-        default="CONFIRMED"
+        default="PENDING_PAYMENT"
     )
 
     payment_intent_id = Column(

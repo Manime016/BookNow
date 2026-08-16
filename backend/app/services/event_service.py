@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.models.event import Event
 from app.models.venue import Venue
+from app.models.event_seat import EventSeat
 from app.schemas.event_schema import EventCreate
 
 
@@ -74,6 +75,14 @@ def update_event(
     event.start_time = event_data.start_time
     event.end_time = event_data.end_time
     event.event_metadata = event_data.metadata
+
+    # Keep the amount shown by the admin form in sync with seats that already
+    # exist for this event. New events receive their seats separately.
+    if event_data.metadata and event_data.metadata.get("price") is not None:
+        db.query(EventSeat).filter(EventSeat.event_id == event_id).update(
+            {EventSeat.price: event_data.metadata["price"]},
+            synchronize_session=False
+        )
 
     db.commit()
     db.refresh(event)

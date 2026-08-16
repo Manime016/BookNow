@@ -107,7 +107,8 @@ def update_event_seat_price(
 
 def generate_event_seats(
     db: Session,
-    event_id: int
+    event_id: int,
+    price: float | None = None
 ):
     event = (
         db.query(Event)
@@ -144,18 +145,20 @@ def generate_event_seats(
         if existing:
             continue
 
-        if seat.row_num <= 4:
-            price = 120.00
+        if price is not None:
+            seat_price = price
+        elif seat.row_num <= 4:
+            seat_price = 120.00
         elif seat.row_num <= 8:
-            price = 180.00
+            seat_price = 180.00
         else:
-            price = 240.00
+            seat_price = 240.00
 
         event_seat = EventSeat(
             event_id=event_id,
             seat_id=seat.id,
             status="available",
-            price=price
+            price=seat_price
         )
 
         db.add(event_seat)

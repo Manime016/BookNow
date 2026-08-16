@@ -1,5 +1,6 @@
 import os
 import pymysql
+from pymysql.err import OperationalError
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
@@ -52,7 +53,24 @@ def initialize_database():
         statement = statement.strip()
 
         if statement:
-            cursor.execute(statement)
+            try:
+                cursor.execute(statement)
+            except OperationalError as error:
+                # MySQL versions used locally do not all support CREATE INDEX
+                # IF NOT EXISTS. Re-running startup must not fail merely
+                # because the schema's named indexes are already present.
+                if error.args[0] != 1061:
+                    raise
+
+    # Keep databases created by earlier versions compatible with the current
+    # booking/payment models.  CREATE TABLE IF NOT EXISTS does not alter them.
+    cursor.execute("ALTER TABLE bookings MODIFY booking_status ENUM('PENDING_PAYMENT','CONFIRMED','CANCELLED') NOT NULL DEFAULT 'PENDING_PAYMENT'")
+    cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME='payments' AND COLUMN_NAME='razorpay_order_id'", (settings.MYSQL_DATABASE,))
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("ALTER TABLE payments ADD COLUMN razorpay_order_id VARCHAR(255) UNIQUE NULL")
+    cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME='payments' AND COLUMN_NAME='razorpay_payment_id'", (settings.MYSQL_DATABASE,))
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("ALTER TABLE payments ADD COLUMN razorpay_payment_id VARCHAR(255) UNIQUE NULL")
 
     connection.commit()
 

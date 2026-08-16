@@ -155,3 +155,11 @@ def cancel_booking(
     db.refresh(booking)
 
     return booking
+
+
+def get_all_bookings(db: Session):
+    return (
+        db.query(Booking)
+        .order_by(Booking.created_at.desc())
+        .all()
+    )
