@@ -170,6 +170,21 @@ def verify_razorpay_payment(db: Session, booking_id: int, user_id: int, razorpay
     return {"message": "Payment verified successfully", "booking_id": booking.id, "payment_id": payment.id, "booking_status": booking.booking_status, "event_seat_status": event_seat.status}
 
 
+def refund_payment(payment: Payment):
+    if payment.status != "SUCCESS":
+        raise ValueError("Only a successful payment can be refunded")
+    if not payment.razorpay_payment_id:
+        raise ValueError("Razorpay payment ID is missing")
+
+    try:
+        razorpay_client.payment.refund(
+            payment.razorpay_payment_id,
+            {"amount": int(round(float(payment.amount) * 100))},
+        )
+    except Exception as error:
+        raise ValueError("Refund could not be processed. Booking was not cancelled") from error
+
+
 def get_payment(db: Session, payment_id: int):
     return db.query(Payment).filter(Payment.id == payment_id).first()
 
