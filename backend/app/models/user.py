@@ -8,7 +8,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
+    full_name = Column(String(255), nullable=True)
     email = Column(String(255), unique=True, nullable=False)
+    phone = Column(String(30), nullable=True)
     password_hash = Column(String(255), nullable=False)
     role = Column(
         Enum("customer", "admin"),
