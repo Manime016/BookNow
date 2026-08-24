@@ -1,3 +1,4 @@
+import json
 from sqlalchemy import Column, BigInteger, String, Text, Integer, TIMESTAMP
 from sqlalchemy.sql import func
 
@@ -18,3 +19,12 @@ class Venue(Base):
         nullable=False,
         server_default=func.current_timestamp()
     )
+
+    @property
+    def layout(self):
+        if not self.layout_json:
+            return None
+        try:
+            return json.loads(self.layout_json)
+        except (TypeError, ValueError):
+            return None
