@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.auth import router as auth_router
-from app.db import initialize_database
+from app.db import initialize_database, SessionLocal
+from app.models.user import User
+from app.services.auth_service import hash_password
 from app.routes.venues import router as venue_router
 from app.routes.events import router as event_router
 from app.routes.seats import router as seat_router
@@ -19,6 +21,31 @@ app = FastAPI(
 @app.on_event("startup")
 def initialise_database_on_startup():
     initialize_database()
+
+    # Temporary production bootstrap: ensure the known admin credentials
+    # exist in the deployed database. Remove this block after the first
+    # successful admin login and keep admin creation as an explicit operation.
+    db = SessionLocal()
+    try:
+        admin = db.query(User).filter(User.email == "admin@booknow.com").first()
+        password_hash = hash_password("Admin@123")
+
+        if admin:
+            admin.password_hash = password_hash
+            admin.role = "admin"
+        else:
+            db.add(
+                User(
+                    email="admin@booknow.com",
+                    password_hash=password_hash,
+                    role="admin"
+                )
+            )
+
+        db.commit()
+        print("Admin account bootstrapped successfully.")
+    finally:
+        db.close()
 
 # Configure CORS
 app.add_middleware(
