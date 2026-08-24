@@ -12,9 +12,9 @@ import Checkout from './pages/Checkout'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
+import Profile from './pages/Profile'
 import NotFound from './pages/NotFound'
 
-// Admin Pages
 import AdminDashboard from './pages/admin/Dashboard'
 import AdminEvents from './pages/admin/Events'
 import AdminEventForm from './pages/admin/EventForm'
@@ -25,22 +25,13 @@ import AdminVenues from './pages/admin/Venues'
 import AdminVenueForm from './pages/admin/VenueForm'
 import AdminAnalytics from './pages/admin/Analytics'
 
-// Protected Route Component
 function ProtectedRoute({ children, requiredRole = 'user' }) {
   const { isAuthenticated, user } = useAuthStore()
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" />
-  }
-
-  if (requiredRole === 'admin' && user?.role !== 'admin') {
-    return <Navigate to="/" />
-  }
-
+  if (!isAuthenticated) return <Navigate to="/login" />
+  if (requiredRole === 'admin' && user?.role !== 'admin') return <Navigate to="/" />
   return children
 }
 
-// Admin Routes Component
 function AdminRoutes() {
   return (
     <Routes>
@@ -80,13 +71,11 @@ export default function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       {isAdmin ? (
-        // Admin Layout with nested routes
         <Routes>
           <Route path="/admin/*" element={<AdminRoutes />} />
           <Route path="*" element={<Navigate to="/admin" />} />
         </Routes>
       ) : (
-        // User Layout
         <div className="flex flex-col min-h-screen bg-gray-50">
           <Navbar />
           <main className="flex-grow">
@@ -98,14 +87,8 @@ export default function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/admin/login" element={<Login adminOnly />} />
               <Route path="/register" element={<Register />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
+              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
