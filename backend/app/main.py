@@ -21,11 +21,10 @@ def initialise_database_on_startup():
     initialize_database()
 
 # Configure CORS for the deployed frontend and local development.
-# Keep the production Vercel origin explicit rather than allowing every origin.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://book-now-nine-omega.vercel.app",
+        "https://book-now-sandy.vercel.app",
         "http://localhost:5173",
         "http://localhost:3000",
     ],
