@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { CreditCard, Lock, ArrowLeft } from 'lucide-react'
+import { CreditCard, Lock, ArrowLeft, RefreshCw } from 'lucide-react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { bookingsAPI, paymentsAPI, eventSeatsAPI, eventsAPI, authAPI } from '../services/api'
 import { formatPrice, formatDate } from '../utils/helpers'
@@ -36,6 +36,8 @@ export default function Checkout() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
+  const [verificationData, setVerificationData] = useState(null)
+  const [verificationFailed, setVerificationFailed] = useState(false)
 
   useEffect(() => {
     const fetchCheckoutData = async () => {
@@ -60,12 +62,33 @@ export default function Checkout() {
     fetchCheckoutData()
   }, [bookingId, navigate])
 
+  const verifyPayment = async (response) => {
+    try {
+      await paymentsAPI.verify(Number(bookingId), response)
+      toast.success('Payment successful! Your ticket is confirmed.')
+      navigate('/dashboard', { replace: true })
+    } catch (error) {
+      console.error('Payment verification failed:', error)
+      setVerificationData(response)
+      setVerificationFailed(true)
+      setProcessing(false)
+      toast.error(error.response?.data?.detail || 'Payment was received, but confirmation could not be completed. Please retry verification.')
+    }
+  }
+
+  const handleRetryVerification = async () => {
+    if (!verificationData || processing) return
+    setProcessing(true)
+    await verifyPayment(verificationData)
+  }
+
   const handlePayment = async (eventSubmit) => {
     eventSubmit.preventDefault()
     if (processing) return
 
     try {
       setProcessing(true)
+      setVerificationFailed(false)
       await loadRazorpay()
 
       const { data: order } = await paymentsAPI.createOrder({ booking_id: Number(bookingId) })
@@ -86,18 +109,7 @@ export default function Checkout() {
           contact: user?.phone || '',
         },
         theme: { color: '#0ea5e9' },
-        handler: async (response) => {
-          try {
-            await paymentsAPI.verify(Number(bookingId), response)
-            toast.success('Payment successful! Your ticket is confirmed.')
-            navigate('/dashboard')
-          } catch (error) {
-            console.error('Payment verification failed:', error)
-            toast.error(error.response?.data?.detail || 'Payment verification failed')
-          } finally {
-            setProcessing(false)
-          }
-        },
+        handler: verifyPayment,
         modal: { ondismiss: () => setProcessing(false) },
       })
 
@@ -131,6 +143,15 @@ export default function Checkout() {
             <p className="text-gray-600 mb-8">You will be securely redirected to Razorpay to complete this payment.</p>
             <form onSubmit={handlePayment} className="space-y-6">
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start space-x-3"><Lock className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" /><p className="text-sm text-green-700">BookNow never receives or stores your card details.</p></div>
+              {verificationFailed && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <p className="text-sm text-amber-800 mb-3">Your payment response was received, but confirmation needs to be retried. Do not make another payment.</p>
+                  <button type="button" onClick={handleRetryVerification} disabled={processing} className="btn btn-secondary flex items-center gap-2">
+                    {processing ? <LoadingSpinner size="sm" /> : <RefreshCw className="w-4 h-4" />}
+                    Retry confirmation
+                  </button>
+                </div>
+              )}
               <button type="submit" disabled={processing || booking.booking_status !== 'PENDING_PAYMENT'} className="w-full btn btn-primary py-3 font-bold text-lg flex items-center justify-center space-x-2 disabled:opacity-60">
                 {processing ? <><LoadingSpinner size="sm" /><span>Opening secure checkout...</span></> : <><CreditCard className="w-5 h-5" /><span>Pay {formatPrice(totalAmount)}</span></>}
               </button>
