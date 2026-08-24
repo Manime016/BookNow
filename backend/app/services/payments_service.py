@@ -23,17 +23,34 @@ def _booking_amount(event_seat):
 
 
 def create_razorpay_order(db: Session, booking_id: int, user_id: int):
-    booking = db.query(Booking).filter(Booking.id == booking_id, Booking.user_id == user_id).first()
+    # Lock the booking row so two browser requests cannot create two active
+    # Razorpay orders for the same booking at the same time.
+    booking = (
+        db.query(Booking)
+        .filter(Booking.id == booking_id, Booking.user_id == user_id)
+        .with_for_update()
+        .first()
+    )
     if not booking:
         raise ValueError("Booking not found")
     if booking.booking_status != "PENDING_PAYMENT":
         raise ValueError("Booking is not pending payment")
 
-    event_seat = db.query(EventSeat).filter(EventSeat.id == booking.event_seat_id).first()
+    event_seat = (
+        db.query(EventSeat)
+        .filter(EventSeat.id == booking.event_seat_id)
+        .with_for_update()
+        .first()
+    )
     if not event_seat:
         raise ValueError("Event seat not found")
 
-    seat_lock = db.query(SeatLock).filter(SeatLock.event_seat_id == event_seat.id, SeatLock.user_id == user_id).first()
+    seat_lock = (
+        db.query(SeatLock)
+        .filter(SeatLock.event_seat_id == event_seat.id, SeatLock.user_id == user_id)
+        .with_for_update()
+        .first()
+    )
     if not seat_lock:
         raise ValueError("You do not have a valid seat lock")
 
@@ -42,6 +59,9 @@ def create_razorpay_order(db: Session, booking_id: int, user_id: int):
         db.delete(seat_lock)
         db.commit()
         raise ValueError("Seat lock has expired")
+
+    if event_seat.status != "reserved":
+        raise ValueError("Seat is not reserved")
 
     amount = _booking_amount(event_seat)
 
@@ -52,6 +72,7 @@ def create_razorpay_order(db: Session, booking_id: int, user_id: int):
         .first()
     )
     if existing_payment:
+        db.rollback()
         return {
             "payment_id": existing_payment.id,
             "booking_id": booking.id,
@@ -61,6 +82,8 @@ def create_razorpay_order(db: Session, booking_id: int, user_id: int):
             "currency": "INR",
         }
 
+    # The booking row remains locked for this transaction. This prevents a
+    # second request from passing the CREATED-payment check simultaneously.
     razorpay_order = razorpay_client.order.create({
         "amount": int(round(amount * 100)),
         "currency": "INR",
@@ -94,17 +117,28 @@ def create_razorpay_order(db: Session, booking_id: int, user_id: int):
 
 
 def verify_razorpay_payment(db: Session, booking_id: int, user_id: int, razorpay_order_id: str, razorpay_payment_id: str, razorpay_signature: str):
-    booking = db.query(Booking).filter(Booking.id == booking_id, Booking.user_id == user_id).first()
+    booking = (
+        db.query(Booking)
+        .filter(Booking.id == booking_id, Booking.user_id == user_id)
+        .with_for_update()
+        .first()
+    )
     if not booking:
         raise ValueError("Booking not found")
 
-    payment = db.query(Payment).filter(Payment.booking_id == booking.id, Payment.razorpay_order_id == razorpay_order_id).first()
+    payment = (
+        db.query(Payment)
+        .filter(Payment.booking_id == booking.id, Payment.razorpay_order_id == razorpay_order_id)
+        .with_for_update()
+        .first()
+    )
     if not payment:
         raise ValueError("Payment order not found")
 
     if payment.status == "SUCCESS":
         if payment.razorpay_payment_id != razorpay_payment_id:
             raise ValueError("Payment does not match the recorded transaction")
+        db.rollback()
         return {"message": "Payment already verified", "booking_id": booking.id, "payment_id": payment.id, "booking_status": booking.booking_status, "event_seat_status": "sold"}
 
     if booking.booking_status != "PENDING_PAYMENT":
@@ -125,12 +159,15 @@ def verify_razorpay_payment(db: Session, booking_id: int, user_id: int, razorpay
         razorpay_order = razorpay_client.order.fetch(razorpay_order_id)
         razorpay_payment = razorpay_client.payment.fetch(razorpay_payment_id)
     except Exception:
+        db.rollback()
         raise ValueError("Unable to verify payment with Razorpay")
 
     expected_amount = int(round(float(payment.amount) * 100))
     if str(razorpay_order.get("id")) != str(razorpay_order_id):
+        db.rollback()
         raise ValueError("Invalid Razorpay order")
     if str(razorpay_payment.get("order_id")) != str(razorpay_order_id):
+        db.rollback()
         raise ValueError("Payment does not belong to this Razorpay order")
     if razorpay_payment.get("status") != "captured":
         payment.status = "FAILED"
@@ -145,11 +182,11 @@ def verify_razorpay_payment(db: Session, booking_id: int, user_id: int, razorpay
         db.commit()
         raise ValueError("Captured payment amount does not match booking amount")
 
-    event_seat = db.query(EventSeat).filter(EventSeat.id == booking.event_seat_id).first()
+    event_seat = db.query(EventSeat).filter(EventSeat.id == booking.event_seat_id).with_for_update().first()
     if not event_seat:
         raise ValueError("Event seat not found")
 
-    seat_lock = db.query(SeatLock).filter(SeatLock.event_seat_id == event_seat.id, SeatLock.user_id == user_id).first()
+    seat_lock = db.query(SeatLock).filter(SeatLock.event_seat_id == event_seat.id, SeatLock.user_id == user_id).with_for_update().first()
     if not seat_lock:
         raise ValueError("Seat lock no longer exists; payment requires reconciliation")
     if seat_lock.expires_at <= datetime.utcnow():
