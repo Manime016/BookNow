@@ -24,11 +24,12 @@ import AdminPayments from './pages/admin/Payments'
 import AdminVenues from './pages/admin/Venues'
 import AdminVenueForm from './pages/admin/VenueForm'
 import AdminAnalytics from './pages/admin/Analytics'
+import AdminSettings from './pages/admin/Settings'
 
 function ProtectedRoute({ children, requiredRole = 'user' }) {
   const { isAuthenticated, user } = useAuthStore()
-  if (!isAuthenticated) return <Navigate to="/login" />
-  if (requiredRole === 'admin' && user?.role !== 'admin') return <Navigate to="/" />
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (requiredRole === 'admin' && user?.role !== 'admin') return <Navigate to="/" replace />
   return children
 }
 
@@ -46,6 +47,8 @@ function AdminRoutes() {
       <Route path="/venues" element={<AdminVenues />} />
       <Route path="/venues/new" element={<AdminVenueForm />} />
       <Route path="/venues/:id" element={<AdminVenueForm />} />
+      <Route path="/settings" element={<AdminSettings />} />
+      <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
   )
 }
@@ -73,7 +76,7 @@ export default function App() {
       {isAdmin ? (
         <Routes>
           <Route path="/admin/*" element={<AdminRoutes />} />
-          <Route path="*" element={<Navigate to="/admin" />} />
+          <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
       ) : (
         <div className="flex flex-col min-h-screen bg-gray-50">
