@@ -7,7 +7,6 @@ pydantic-settings
 python-dotenv
 alembic
 python-jose
-passlib
-razorpay
-email-validator
 pwdlib[argon2]
+email-validator
+razorpay
