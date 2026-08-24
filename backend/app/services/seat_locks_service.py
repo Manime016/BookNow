@@ -22,12 +22,23 @@ def create_seat_lock(db: Session, event_seat_id: int, user_id: int):
     if not event_seat:
         raise ValueError("Event seat not found")
 
-    existing_lock = db.query(SeatLock).filter(SeatLock.event_seat_id == event_seat_id).with_for_update().first()
+    existing_lock = (
+        db.query(SeatLock)
+        .filter(SeatLock.event_seat_id == event_seat_id)
+        .with_for_update()
+        .first()
+    )
     if existing_lock:
         if existing_lock.expires_at > now:
             db.rollback()
             raise ValueError("Seat is already locked")
+
+        # An expired lock may have left the seat in RESERVED state.
+        # Remove the stale lock and explicitly restore availability before
+        # creating the new lock in the same transaction.
         db.delete(existing_lock)
+        if event_seat.status == "reserved":
+            event_seat.status = "available"
         db.flush()
 
     if event_seat.status != "available":
@@ -72,11 +83,21 @@ def delete_seat_lock(db: Session, event_seat_id: int):
 
 def release_expired_locks(db: Session):
     now = _now()
-    expired_locks = db.query(SeatLock).filter(SeatLock.expires_at <= now).with_for_update().all()
+    expired_locks = (
+        db.query(SeatLock)
+        .filter(SeatLock.expires_at <= now)
+        .with_for_update()
+        .all()
+    )
     released_count = 0
 
     for lock in expired_locks:
-        event_seat = db.query(EventSeat).filter(EventSeat.id == lock.event_seat_id).with_for_update().first()
+        event_seat = (
+            db.query(EventSeat)
+            .filter(EventSeat.id == lock.event_seat_id)
+            .with_for_update()
+            .first()
+        )
         if event_seat and event_seat.status == "reserved":
             event_seat.status = "available"
         db.delete(lock)
