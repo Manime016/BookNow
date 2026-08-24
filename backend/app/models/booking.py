@@ -29,8 +29,7 @@ class Booking(Base):
     event_seat_id = Column(
         BigInteger,
         ForeignKey("event_seats.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True
+        nullable=False
     )
 
     booking_status = Column(
