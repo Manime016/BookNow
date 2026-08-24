@@ -6,7 +6,11 @@ export const useAuthStore = create((set) => ({
   isAuthenticated: !!localStorage.getItem('token'),
   userRole: localStorage.getItem('userRole') || 'user',
 
-  setUser: (user) => set({ user, userRole: user?.role || 'user' }),
+  setUser: (user) => {
+    const role = user?.role || 'user'
+    localStorage.setItem('userRole', role)
+    set({ user, userRole: role })
+  },
   setToken: (token) => {
     if (token) localStorage.setItem('token', token)
     else localStorage.removeItem('token')
