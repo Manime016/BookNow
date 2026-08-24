@@ -6,6 +6,27 @@ import { bookingsAPI, paymentsAPI, eventSeatsAPI, eventsAPI } from '../services/
 import { formatPrice, formatDate } from '../utils/helpers'
 import toast from 'react-hot-toast'
 
+const PLATFORM_FEE = 2
+
+function loadRazorpay() {
+  if (window.Razorpay) return Promise.resolve(true)
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-razorpay-checkout]')
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true), { once: true })
+      existing.addEventListener('error', reject, { once: true })
+      return
+    }
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.async = true
+    script.dataset.razorpayCheckout = 'true'
+    script.onload = () => resolve(true)
+    script.onerror = () => reject(new Error('Razorpay checkout could not be loaded'))
+    document.body.appendChild(script)
+  })
+}
+
 export default function Checkout() {
   const { bookingId } = useParams()
   const navigate = useNavigate()
@@ -34,23 +55,30 @@ export default function Checkout() {
     fetchCheckoutData()
   }, [bookingId, navigate])
 
-  const handlePayment = async (event) => {
-    event.preventDefault()
+  const handlePayment = async (eventSubmit) => {
+    eventSubmit.preventDefault()
+    if (processing) return
+
     try {
       setProcessing(true)
+      await loadRazorpay()
       const { data: order } = await paymentsAPI.createOrder({ booking_id: Number(bookingId) })
-      if (!window.Razorpay) throw new Error('Razorpay checkout could not be loaded')
-      new window.Razorpay({
+
+      const razorpay = new window.Razorpay({
         key: order.razorpay_key_id,
         amount: Math.round(Number(order.amount) * 100),
-        currency: order.currency,
+        currency: order.currency || 'INR',
         order_id: order.razorpay_order_id,
         name: 'BookNow',
-        description: `Booking #${bookingId}`,
+        description: `Booking #${bookingId} - ${event?.title || 'Event ticket'}`,
+        prefill: {
+          email: undefined,
+        },
+        theme: { color: '#0ea5e9' },
         handler: async (response) => {
           try {
-            await paymentsAPI.verify(bookingId, response)
-            toast.success('Payment successful!')
+            await paymentsAPI.verify(Number(bookingId), response)
+            toast.success('Payment successful! Your ticket is confirmed.')
             navigate('/dashboard')
           } catch (error) {
             toast.error(error.response?.data?.detail || 'Payment verification failed')
@@ -59,7 +87,8 @@ export default function Checkout() {
           }
         },
         modal: { ondismiss: () => setProcessing(false) },
-      }).open()
+      })
+      razorpay.open()
     } catch (error) {
       setProcessing(false)
       toast.error(error.response?.data?.detail || error.message || 'Unable to start payment')
@@ -69,7 +98,9 @@ export default function Checkout() {
   if (loading) return <div className="flex justify-center items-center min-h-screen"><LoadingSpinner size="lg" /></div>
   if (!booking || !eventSeat || !event) return <div className="flex justify-center items-center min-h-screen"><p className="text-gray-600">Booking not found</p></div>
 
-  const amount = Number(eventSeat.price)
+  const seatPrice = Number(eventSeat.price)
+  const totalAmount = seatPrice + PLATFORM_FEE
+
   return (
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -80,14 +111,19 @@ export default function Checkout() {
             <p className="text-gray-600 mb-8">You will be securely redirected to Razorpay to complete this payment.</p>
             <form onSubmit={handlePayment} className="space-y-6">
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start space-x-3"><Lock className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" /><p className="text-sm text-green-700">BookNow never receives or stores your card details.</p></div>
-              <button type="submit" disabled={processing} className="w-full btn btn-primary py-3 font-bold text-lg flex items-center justify-center space-x-2">
-                {processing ? <><LoadingSpinner size="sm" /><span>Opening secure checkout...</span></> : <><CreditCard className="w-5 h-5" /><span>Pay {formatPrice(amount)}</span></>}
+              <button type="submit" disabled={processing || booking.booking_status !== 'PENDING_PAYMENT'} className="w-full btn btn-primary py-3 font-bold text-lg flex items-center justify-center space-x-2 disabled:opacity-60">
+                {processing ? <><LoadingSpinner size="sm" /><span>Opening secure checkout...</span></> : <><CreditCard className="w-5 h-5" /><span>Pay {formatPrice(totalAmount)}</span></>}
               </button>
+              {booking.booking_status !== 'PENDING_PAYMENT' && <p className="text-sm text-gray-500 text-center">This booking is no longer awaiting payment.</p>}
             </form>
           </div></div>
           <div><div className="card p-8 sticky top-24"><h2 className="text-2xl font-bold mb-6">Order Summary</h2>
             <div className="mb-6 pb-6 border-b border-gray-200"><p className="text-sm text-gray-600 mb-2">Event</p><p className="font-bold text-lg mb-2">{event.title}</p><p className="text-sm text-gray-600">{formatDate(event.start_time)}</p></div>
-            <div className="flex justify-between items-center"><span className="font-bold text-lg">Total Amount</span><span className="text-3xl font-bold text-gradient">{formatPrice(amount)}</span></div>
+            <div className="space-y-3 mb-6 pb-6 border-b border-gray-200">
+              <div className="flex justify-between"><span className="text-gray-600">Ticket</span><span className="font-semibold">{formatPrice(seatPrice)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Platform Fee</span><span className="font-semibold">{formatPrice(PLATFORM_FEE)}</span></div>
+            </div>
+            <div className="flex justify-between items-center"><span className="font-bold text-lg">Total Amount</span><span className="text-3xl font-bold text-gradient">{formatPrice(totalAmount)}</span></div>
           </div></div>
         </div>
       </div>
