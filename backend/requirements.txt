@@ -9,3 +9,4 @@ alembic
 python-jose
 passlib
 razorpay
+email-validator
