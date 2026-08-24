@@ -81,11 +81,9 @@ def initialize_database():
 
     _add_column_if_missing(cursor, "users", "full_name", "VARCHAR(255) NULL")
     _add_column_if_missing(cursor, "users", "phone", "VARCHAR(30) NULL")
+    _add_column_if_missing(cursor, "venues", "layout_json", "TEXT NULL")
 
     cursor.execute("ALTER TABLE bookings MODIFY booking_status ENUM('PENDING_PAYMENT','CONFIRMED','CANCELLED') NOT NULL DEFAULT 'PENDING_PAYMENT'")
-
-    # A cancelled booking must remain in history, while the same event seat
-    # must be bookable again. Remove the old one-booking-per-seat constraint.
     _drop_index_if_exists(cursor, "bookings", "uq_booking_eventseat")
 
     cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME='payments' AND COLUMN_NAME='razorpay_order_id'", (settings.MYSQL_DATABASE,))
