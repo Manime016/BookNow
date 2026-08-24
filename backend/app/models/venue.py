@@ -12,6 +12,7 @@ class Venue(Base):
     address = Column(Text, nullable=True)
     total_rows = Column(Integer, nullable=False)
     total_cols = Column(Integer, nullable=False)
+    layout_json = Column(Text, nullable=True)
     created_at = Column(
         TIMESTAMP,
         nullable=False,
