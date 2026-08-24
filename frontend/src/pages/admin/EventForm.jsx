@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
+import { ArrowLeft, Image as ImageIcon } from 'lucide-react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
 import AdminLayout from '../../components/AdminLayout'
 import { eventsAPI, venuesAPI, eventSeatsAPI } from '../../services/api'
 import toast from 'react-hot-toast'
 
-const emptyForm = { venue_id: '', title: '', date: '', time: '', end_time: '', description: '', category: 'Concert', price: '100' }
+const emptyForm = { venue_id: '', title: '', date: '', time: '', end_time: '', description: '', category: 'Concert', price: '100', thumbnail_url: '' }
 const toLocal = (value) => value ? new Date(value).toISOString().slice(0, 16) : ''
 
 export default function AdminEventForm() {
@@ -21,7 +21,17 @@ export default function AdminEventForm() {
         setVenues(venueResponse.data)
         if (eventResponse) {
           const event = eventResponse.data
-          setFormData({ venue_id: String(event.venue_id), title: event.title, date: toLocal(event.start_time).slice(0, 10), time: toLocal(event.start_time).slice(11), end_time: toLocal(event.end_time), description: event.metadata?.description || '', category: event.metadata?.category || 'Concert', price: String(event.metadata?.price || 100) })
+          setFormData({
+            venue_id: String(event.venue_id),
+            title: event.title,
+            date: toLocal(event.start_time).slice(0, 10),
+            time: toLocal(event.start_time).slice(11),
+            end_time: toLocal(event.end_time),
+            description: event.metadata?.description || '',
+            category: event.metadata?.category || 'Concert',
+            price: String(event.metadata?.price || 100),
+            thumbnail_url: event.metadata?.thumbnail_url || '',
+          })
         }
       })
       .catch((error) => toast.error(error.response?.data?.detail || 'Unable to load event form'))
@@ -31,13 +41,26 @@ export default function AdminEventForm() {
   const handleSubmit = async (event) => {
     event.preventDefault()
     setLoading(true)
+
+    if (formData.thumbnail_url && !/^https:\/\//i.test(formData.thumbnail_url)) {
+      toast.error('Thumbnail URL must use HTTPS')
+      setLoading(false)
+      return
+    }
+
     const payload = {
       venue_id: Number(formData.venue_id),
       title: formData.title,
       start_time: new Date(`${formData.date}T${formData.time}`).toISOString(),
       end_time: formData.end_time ? new Date(formData.end_time).toISOString() : null,
-      metadata: { description: formData.description, category: formData.category, price: Number(formData.price) },
+      metadata: {
+        description: formData.description,
+        category: formData.category,
+        price: Number(formData.price),
+        thumbnail_url: formData.thumbnail_url.trim() || null,
+      },
     }
+
     try {
       const response = id ? await eventsAPI.update(id, payload) : await eventsAPI.create(payload)
       if (!id) await eventSeatsAPI.generate(response.data.id, Number(formData.price))
@@ -45,7 +68,9 @@ export default function AdminEventForm() {
       navigate('/admin/events')
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Unable to save event')
-    } finally { setLoading(false) }
+    } finally {
+      setLoading(false)
+    }
   }
 
   return <AdminLayout><div className="max-w-3xl">
@@ -62,6 +87,12 @@ export default function AdminEventForm() {
           <label className="block text-sm font-medium">Price per seat<input required min="0" step="0.01" type="number" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="input-base w-full mt-2" /></label>
         </div>
         <label className="block text-sm font-medium">Description<textarea required value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="input-base w-full h-28 mt-2" /></label>
+        <div>
+          <label className="block text-sm font-medium mb-2 flex items-center gap-2"><ImageIcon className="w-4 h-4" />Custom thumbnail URL</label>
+          <input type="url" value={formData.thumbnail_url} onChange={(e) => setFormData({ ...formData, thumbnail_url: e.target.value })} className="input-base w-full" placeholder="https://example.com/event-thumbnail.jpg" />
+          <p className="text-xs text-gray-500 mt-2">Use a direct HTTPS image URL. Leave empty to use the default event artwork.</p>
+          {formData.thumbnail_url && <img src={formData.thumbnail_url} alt="Thumbnail preview" className="mt-3 h-40 w-full object-cover rounded-lg border" onError={(e) => { e.currentTarget.style.display = 'none' }} />}
+        </div>
         <p className="text-sm text-gray-600">New events automatically receive seats from the selected venue.</p>
         <button disabled={loading} className="btn btn-primary py-2 px-6">{loading ? 'Saving...' : 'Save Event'}</button>
       </form>
