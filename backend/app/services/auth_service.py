@@ -2,7 +2,7 @@ from pwdlib import PasswordHash
 from jose import jwt
 from config import settings
 from app.models.user import User
-from app.schemas.user_schema import UserCreate
+from app.schemas.user_schema import UserCreate, ProfileUpdate
 
 
 password_hash = PasswordHash.recommended()
@@ -26,11 +26,11 @@ def register_user(db, user_data: UserCreate):
     if existing_user:
         raise ValueError("Email already registered")
 
-    hashed_password = hash_password(user_data.password)
-
     user = User(
+        full_name=user_data.full_name.strip(),
         email=user_data.email,
-        password_hash=hashed_password,
+        phone=user_data.phone.strip() if user_data.phone else None,
+        password_hash=hash_password(user_data.password),
         role="customer"
     )
 
@@ -39,6 +39,15 @@ def register_user(db, user_data: UserCreate):
     db.refresh(user)
 
     return user
+
+
+def update_profile(db, user: User, profile_data: ProfileUpdate):
+    user.full_name = profile_data.full_name.strip()
+    user.phone = profile_data.phone.strip() if profile_data.phone else None
+    db.commit()
+    db.refresh(user)
+    return user
+
 
 def authenticate_user(db, email: str, password: str):
     user = (
