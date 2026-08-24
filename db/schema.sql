@@ -1,109 +1,109 @@
 -- SQL DDL schema for BookNow (MySQL)
--- Tables: users, venues, events, seats, event_seats, seat_locks, bookings
+-- Tables: users, venues, events, seats, event_seats, seat_locks, bookings, payments
 
 SET FOREIGN_KEY_CHECKS=0;
 
 -- Users
 CREATE TABLE IF NOT EXISTS users (
-	id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-	email VARCHAR(255) NOT NULL UNIQUE,
-	password_hash VARCHAR(255) NOT NULL,
-	role ENUM('customer','admin') NOT NULL DEFAULT 'customer',
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(255),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    phone VARCHAR(30),
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('customer','admin') NOT NULL DEFAULT 'customer',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Venues
 CREATE TABLE IF NOT EXISTS venues (
-	id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-	name VARCHAR(255) NOT NULL,
-	address TEXT,
-	total_rows INT UNSIGNED NOT NULL,
-	total_cols INT UNSIGNED NOT NULL,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    address TEXT,
+    total_rows INT UNSIGNED NOT NULL,
+    total_cols INT UNSIGNED NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Events (e.g., movie show for a particular date/time in a venue)
+-- Events
 CREATE TABLE IF NOT EXISTS events (
-	id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-	venue_id BIGINT UNSIGNED NOT NULL,
-	title VARCHAR(255) NOT NULL,
-	start_time DATETIME NOT NULL,
-	end_time DATETIME,
-	metadata JSON,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE CASCADE
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    venue_id BIGINT UNSIGNED NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    start_time DATETIME NOT NULL,
+    end_time DATETIME,
+    metadata JSON,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Seats (master seat list per venue)
+-- Seats
 CREATE TABLE IF NOT EXISTS seats (
-	id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-	venue_id BIGINT UNSIGNED NOT NULL,
-	row_num INT NOT NULL,
-	col_num INT NOT NULL,
-	seat_code VARCHAR(16) NOT NULL,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	UNIQUE KEY uq_venue_seatcode (venue_id, seat_code),
-	FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE CASCADE
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    venue_id BIGINT UNSIGNED NOT NULL,
+    row_num INT NOT NULL,
+    col_num INT NOT NULL,
+    seat_code VARCHAR(16) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_venue_seatcode (venue_id, seat_code),
+    FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Event_Seats: concrete seat instances for a specific event (price, status, version)
+-- Event seats
 CREATE TABLE IF NOT EXISTS event_seats (
-	id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-	event_id BIGINT UNSIGNED NOT NULL,
-	seat_id BIGINT UNSIGNED NOT NULL,
-	status ENUM('available','reserved','sold') NOT NULL DEFAULT 'available',
-	price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-	version BIGINT UNSIGNED NOT NULL DEFAULT 0,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-	UNIQUE KEY uq_event_seat (event_id, seat_id),
-	FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-	FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE CASCADE
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    event_id BIGINT UNSIGNED NOT NULL,
+    seat_id BIGINT UNSIGNED NOT NULL,
+    status ENUM('available','reserved','sold') NOT NULL DEFAULT 'available',
+    price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    version BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_event_seat (event_id, seat_id),
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+    FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Seat_Locks: short-term locks while user is selecting seats
+-- Seat locks
 CREATE TABLE IF NOT EXISTS seat_locks (
-	id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-	event_seat_id BIGINT UNSIGNED NOT NULL,
-	user_id BIGINT UNSIGNED NOT NULL,
-	locked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	expires_at TIMESTAMP NOT NULL,
-	CONSTRAINT uq_event_seat_lock UNIQUE (event_seat_id),
-	FOREIGN KEY (event_seat_id) REFERENCES event_seats(id) ON DELETE CASCADE,
-	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    event_seat_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    locked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    CONSTRAINT uq_event_seat_lock UNIQUE (event_seat_id),
+    FOREIGN KEY (event_seat_id) REFERENCES event_seats(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Bookings
 CREATE TABLE IF NOT EXISTS bookings (
-	id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-	user_id BIGINT UNSIGNED NOT NULL,
-	event_seat_id BIGINT UNSIGNED NOT NULL,
-	booking_status ENUM('PENDING_PAYMENT','CONFIRMED','CANCELLED') NOT NULL DEFAULT 'PENDING_PAYMENT',
-	payment_intent_id VARCHAR(255),
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-	FOREIGN KEY (event_seat_id) REFERENCES event_seats(id) ON DELETE CASCADE,
-	UNIQUE KEY uq_booking_eventseat (event_seat_id)
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    event_seat_id BIGINT UNSIGNED NOT NULL,
+    booking_status ENUM('PENDING_PAYMENT','CONFIRMED','CANCELLED') NOT NULL DEFAULT 'PENDING_PAYMENT',
+    payment_intent_id VARCHAR(255),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (event_seat_id) REFERENCES event_seats(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_booking_eventseat (event_seat_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Optional payments table (for storing gateway responses)
+-- Payments
 CREATE TABLE IF NOT EXISTS payments (
-	id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-	booking_id BIGINT UNSIGNED NOT NULL,
-	payment_method VARCHAR(64),
-	razorpay_order_id VARCHAR(255) UNIQUE,
-	razorpay_payment_id VARCHAR(255) UNIQUE,
-	transaction_id VARCHAR(255),
-	amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-	status VARCHAR(64),
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    booking_id BIGINT UNSIGNED NOT NULL,
+    payment_method VARCHAR(64),
+    razorpay_order_id VARCHAR(255) UNIQUE,
+    razorpay_payment_id VARCHAR(255) UNIQUE,
+    transaction_id VARCHAR(255),
+    amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    status VARCHAR(64),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS=1;
 
--- Recommended indexes
 CREATE INDEX idx_events_venue_start ON events (venue_id, start_time);
 CREATE INDEX idx_event_seats_event_status ON event_seats (event_id, status);
-
