@@ -14,7 +14,6 @@ def _ssl_kwargs():
     """Return PyMySQL TLS settings when a CA certificate is configured."""
     if not settings.MYSQL_SSL_CA:
         return {}
-
     return {
         "ssl": {
             "ca": settings.MYSQL_SSL_CA,
@@ -24,8 +23,17 @@ def _ssl_kwargs():
     }
 
 
-def initialize_database():
+def _add_column_if_missing(cursor, table_name, column_name, definition):
+    cursor.execute(
+        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND COLUMN_NAME=%s",
+        (settings.MYSQL_DATABASE, table_name, column_name),
+    )
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{column_name}` {definition}")
 
+
+def initialize_database():
     connection = pymysql.connect(
         host=settings.MYSQL_HOST,
         port=settings.MYSQL_PORT,
@@ -33,13 +41,8 @@ def initialize_database():
         password=settings.MYSQL_PASSWORD,
         **_ssl_kwargs(),
     )
-
     cursor = connection.cursor()
-
-    cursor.execute(
-        f"CREATE DATABASE IF NOT EXISTS `{settings.MYSQL_DATABASE}`"
-    )
-
+    cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{settings.MYSQL_DATABASE}`")
     cursor.close()
     connection.close()
 
@@ -51,30 +54,23 @@ def initialize_database():
         database=settings.MYSQL_DATABASE,
         **_ssl_kwargs(),
     )
-
     cursor = connection.cursor()
 
-    schema_path = os.path.abspath(
-        os.path.join(
-            os.path.dirname(__file__),
-            "../../db/schema.sql"
-        )
-    )
-
+    schema_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../db/schema.sql"))
     with open(schema_path, "r", encoding="utf-8") as file:
         sql = file.read()
 
-    statements = sql.split(";")
-
-    for statement in statements:
+    for statement in sql.split(";"):
         statement = statement.strip()
-
         if statement:
             try:
                 cursor.execute(statement)
             except OperationalError as error:
                 if error.args[0] != 1061:
                     raise
+
+    _add_column_if_missing(cursor, "users", "full_name", "VARCHAR(255) NULL")
+    _add_column_if_missing(cursor, "users", "phone", "VARCHAR(30) NULL")
 
     cursor.execute("ALTER TABLE bookings MODIFY booking_status ENUM('PENDING_PAYMENT','CONFIRMED','CANCELLED') NOT NULL DEFAULT 'PENDING_PAYMENT'")
     cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME='payments' AND COLUMN_NAME='razorpay_order_id'", (settings.MYSQL_DATABASE,))
@@ -85,10 +81,8 @@ def initialize_database():
         cursor.execute("ALTER TABLE payments ADD COLUMN razorpay_payment_id VARCHAR(255) UNIQUE NULL")
 
     connection.commit()
-
     cursor.close()
     connection.close()
-
     print("Database initialized successfully.")
 
 
@@ -101,25 +95,17 @@ DATABASE_URL = URL.create(
     database=settings.MYSQL_DATABASE,
 )
 
-
 engine_kwargs = {"echo": True}
 if settings.MYSQL_SSL_CA:
     engine_kwargs["connect_args"] = _ssl_kwargs()
 
 engine = create_engine(DATABASE_URL, **engine_kwargs)
-
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
-
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
 def get_db():
     db = SessionLocal()
-
     try:
         yield db
     finally:
