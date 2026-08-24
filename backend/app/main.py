@@ -10,6 +10,7 @@ from app.routes.event_seats import router as event_seat_router
 from app.routes.seat_locks import router as seat_lock_router
 from app.routes.bookings import router as booking_router
 from app.routes.payments import router as payment_router
+from app.routes.admin import router as admin_router
 
 app = FastAPI(
     title="BookNow API",
@@ -42,6 +43,7 @@ app.include_router(event_seat_router, prefix="/api")
 app.include_router(seat_lock_router, prefix="/api")
 app.include_router(booking_router, prefix="/api")
 app.include_router(payment_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 
 @app.get("/")
 def root():
