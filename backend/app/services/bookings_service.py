@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 from app.models.booking import Booking
 from app.models.event_seat import EventSeat
 from app.models.seat_lock import SeatLock
+from app.models.payment import Payment
 from app.models.user import User
+from app.services.payments_service import refund_payment
 
 
 def create_booking(db: Session, event_seat_id: int, user_id: int):
@@ -77,14 +79,38 @@ def get_user_bookings(db: Session, user_id: int):
 
 
 def cancel_booking(db: Session, booking_id: int, user_id: int):
-    booking = db.query(Booking).filter(Booking.id == booking_id, Booking.user_id == user_id).first()
+    booking = (
+        db.query(Booking)
+        .filter(Booking.id == booking_id, Booking.user_id == user_id)
+        .with_for_update()
+        .first()
+    )
     if not booking:
         return None
+
     if booking.booking_status == "CANCELLED":
         raise ValueError("Booking is already cancelled")
 
+    if booking.booking_status not in {"PENDING_PAYMENT", "CONFIRMED"}:
+        raise ValueError("Booking cannot be cancelled")
+
+    payment = (
+        db.query(Payment)
+        .filter(Payment.booking_id == booking.id, Payment.status == "SUCCESS")
+        .order_by(Payment.created_at.desc())
+        .first()
+    )
+
+    # A confirmed booking has already been paid. Never release the seat
+    # unless Razorpay has successfully accepted the refund first.
+    if booking.booking_status == "CONFIRMED":
+        if not payment or not payment.razorpay_payment_id:
+            raise ValueError("Paid booking cannot be cancelled because its payment record is missing")
+        refund_payment(payment)
+        payment.status = "REFUNDED"
+
     booking.booking_status = "CANCELLED"
-    event_seat = db.query(EventSeat).filter(EventSeat.id == booking.event_seat_id).first()
+    event_seat = db.query(EventSeat).filter(EventSeat.id == booking.event_seat_id).with_for_update().first()
     seat_lock = db.query(SeatLock).filter(SeatLock.event_seat_id == booking.event_seat_id).first()
 
     if event_seat:
