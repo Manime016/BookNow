@@ -1,4 +1,5 @@
 import os
+import ssl
 import pymysql
 from pymysql.err import OperationalError
 
@@ -9,13 +10,28 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from config import settings
 
 
+def _ssl_kwargs():
+    """Return PyMySQL TLS settings when a CA certificate is configured."""
+    if not settings.MYSQL_SSL_CA:
+        return {}
+
+    return {
+        "ssl": {
+            "ca": settings.MYSQL_SSL_CA,
+            "cert_reqs": ssl.CERT_REQUIRED,
+            "check_hostname": True,
+        }
+    }
+
+
 def initialize_database():
 
     connection = pymysql.connect(
         host=settings.MYSQL_HOST,
         port=settings.MYSQL_PORT,
         user=settings.MYSQL_USER,
-        password=settings.MYSQL_PASSWORD
+        password=settings.MYSQL_PASSWORD,
+        **_ssl_kwargs(),
     )
 
     cursor = connection.cursor()
@@ -32,7 +48,8 @@ def initialize_database():
         port=settings.MYSQL_PORT,
         user=settings.MYSQL_USER,
         password=settings.MYSQL_PASSWORD,
-        database=settings.MYSQL_DATABASE
+        database=settings.MYSQL_DATABASE,
+        **_ssl_kwargs(),
     )
 
     cursor = connection.cursor()
@@ -56,14 +73,9 @@ def initialize_database():
             try:
                 cursor.execute(statement)
             except OperationalError as error:
-                # MySQL versions used locally do not all support CREATE INDEX
-                # IF NOT EXISTS. Re-running startup must not fail merely
-                # because the schema's named indexes are already present.
                 if error.args[0] != 1061:
                     raise
 
-    # Keep databases created by earlier versions compatible with the current
-    # booking/payment models.  CREATE TABLE IF NOT EXISTS does not alter them.
     cursor.execute("ALTER TABLE bookings MODIFY booking_status ENUM('PENDING_PAYMENT','CONFIRMED','CANCELLED') NOT NULL DEFAULT 'PENDING_PAYMENT'")
     cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME='payments' AND COLUMN_NAME='razorpay_order_id'", (settings.MYSQL_DATABASE,))
     if cursor.fetchone()[0] == 0:
@@ -80,7 +92,6 @@ def initialize_database():
     print("Database initialized successfully.")
 
 
-# SQLAlchemy connection
 DATABASE_URL = URL.create(
     drivername="mysql+pymysql",
     username=settings.MYSQL_USER,
@@ -91,10 +102,11 @@ DATABASE_URL = URL.create(
 )
 
 
-engine = create_engine(
-    DATABASE_URL,
-    echo=True
-)
+engine_kwargs = {"echo": True}
+if settings.MYSQL_SSL_CA:
+    engine_kwargs["connect_args"] = _ssl_kwargs()
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -105,7 +117,6 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
-# Database session for API routes/services
 def get_db():
     db = SessionLocal()
 
