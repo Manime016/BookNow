@@ -85,8 +85,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     payment_intent_id VARCHAR(255),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (event_seat_id) REFERENCES event_seats(id) ON DELETE CASCADE,
-    UNIQUE KEY uq_booking_eventseat (event_seat_id)
+    FOREIGN KEY (event_seat_id) REFERENCES event_seats(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Payments
