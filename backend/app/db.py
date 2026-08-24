@@ -33,6 +33,16 @@ def _add_column_if_missing(cursor, table_name, column_name, definition):
         cursor.execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{column_name}` {definition}")
 
 
+def _drop_index_if_exists(cursor, table_name, index_name):
+    cursor.execute(
+        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND INDEX_NAME=%s",
+        (settings.MYSQL_DATABASE, table_name, index_name),
+    )
+    if cursor.fetchone()[0] > 0:
+        cursor.execute(f"ALTER TABLE `{table_name}` DROP INDEX `{index_name}`")
+
+
 def initialize_database():
     connection = pymysql.connect(
         host=settings.MYSQL_HOST,
@@ -73,6 +83,11 @@ def initialize_database():
     _add_column_if_missing(cursor, "users", "phone", "VARCHAR(30) NULL")
 
     cursor.execute("ALTER TABLE bookings MODIFY booking_status ENUM('PENDING_PAYMENT','CONFIRMED','CANCELLED') NOT NULL DEFAULT 'PENDING_PAYMENT'")
+
+    # A cancelled booking must remain in history, while the same event seat
+    # must be bookable again. Remove the old one-booking-per-seat constraint.
+    _drop_index_if_exists(cursor, "bookings", "uq_booking_eventseat")
+
     cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME='payments' AND COLUMN_NAME='razorpay_order_id'", (settings.MYSQL_DATABASE,))
     if cursor.fetchone()[0] == 0:
         cursor.execute("ALTER TABLE payments ADD COLUMN razorpay_order_id VARCHAR(255) UNIQUE NULL")
