@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.seat_lock import SeatLock
 from app.models.event_seat import EventSeat
+from app.models.booking import Booking
 
 
 LOCK_DURATION_MINUTES = 10
@@ -33,9 +34,6 @@ def create_seat_lock(db: Session, event_seat_id: int, user_id: int):
             db.rollback()
             raise ValueError("Seat is already locked")
 
-        # An expired lock may have left the seat in RESERVED state.
-        # Remove the stale lock and explicitly restore availability before
-        # creating the new lock in the same transaction.
         db.delete(existing_lock)
         if event_seat.status == "reserved":
             event_seat.status = "available"
@@ -82,6 +80,7 @@ def delete_seat_lock(db: Session, event_seat_id: int):
 
 
 def release_expired_locks(db: Session):
+    """Release expired locks and cancel only their unpaid pending bookings."""
     now = _now()
     expired_locks = (
         db.query(SeatLock)
@@ -98,8 +97,23 @@ def release_expired_locks(db: Session):
             .with_for_update()
             .first()
         )
+
+        pending_booking = (
+            db.query(Booking)
+            .filter(
+                Booking.event_seat_id == lock.event_seat_id,
+                Booking.booking_status == "PENDING_PAYMENT",
+            )
+            .with_for_update()
+            .first()
+        )
+
+        if pending_booking:
+            pending_booking.booking_status = "CANCELLED"
+
         if event_seat and event_seat.status == "reserved":
             event_seat.status = "available"
+
         db.delete(lock)
         released_count += 1
 
