@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     RAZORPAY_KEY_ID: str
     RAZORPAY_KEY_SECRET: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
