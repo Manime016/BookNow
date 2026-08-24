@@ -10,10 +10,15 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
+let redirectingToLogin = false
+
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
-    if (token) config.headers.Authorization = `Bearer ${token}`
+    if (token) {
+      config.headers = config.headers || {}
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   (error) => Promise.reject(error),
@@ -22,11 +27,21 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && !error.config?.url?.startsWith('/auth/login')) {
+    const status = error.response?.status
+    const requestUrl = error.config?.url || ''
+    const isLoginRequest = requestUrl.includes('/auth/login')
+    const isRegisterRequest = requestUrl.includes('/auth/register')
+
+    if (status === 401 && !isLoginRequest && !isRegisterRequest) {
       localStorage.removeItem('token')
       localStorage.removeItem('userRole')
-      window.location.href = '/login'
+
+      if (!redirectingToLogin && window.location.pathname !== '/login') {
+        redirectingToLogin = true
+        window.location.replace('/login?session=expired')
+      }
     }
+
     return Promise.reject(error)
   },
 )
