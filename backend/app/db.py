@@ -33,14 +33,27 @@ def _add_column_if_missing(cursor, table_name, column_name, definition):
         cursor.execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{column_name}` {definition}")
 
 
-def _drop_index_if_exists(cursor, table_name, index_name):
+def _replace_unique_index_with_non_unique(cursor, table_name, unique_index_name, replacement_index_name, column_name):
+    """Replace a unique index without temporarily removing the FK-supporting index."""
     cursor.execute(
         "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS "
         "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND INDEX_NAME=%s",
-        (settings.MYSQL_DATABASE, table_name, index_name),
+        (settings.MYSQL_DATABASE, table_name, unique_index_name),
     )
-    if cursor.fetchone()[0] > 0:
-        cursor.execute(f"ALTER TABLE `{table_name}` DROP INDEX `{index_name}`")
+    if cursor.fetchone()[0] == 0:
+        return
+
+    cursor.execute(
+        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND INDEX_NAME=%s",
+        (settings.MYSQL_DATABASE, table_name, replacement_index_name),
+    )
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            f"ALTER TABLE `{table_name}` ADD INDEX `{replacement_index_name}` (`{column_name}`)"
+        )
+
+    cursor.execute(f"ALTER TABLE `{table_name}` DROP INDEX `{unique_index_name}`")
 
 
 def initialize_database():
@@ -84,7 +97,17 @@ def initialize_database():
     _add_column_if_missing(cursor, "venues", "layout_json", "TEXT NULL")
 
     cursor.execute("ALTER TABLE bookings MODIFY booking_status ENUM('PENDING_PAYMENT','CONFIRMED','CANCELLED') NOT NULL DEFAULT 'PENDING_PAYMENT'")
-    _drop_index_if_exists(cursor, "bookings", "uq_booking_eventseat")
+
+    # MySQL may use the old unique index to satisfy the bookings -> event_seats
+    # foreign key. Add a replacement non-unique index first, then remove the
+    # uniqueness constraint so a cancelled seat can be booked again.
+    _replace_unique_index_with_non_unique(
+        cursor,
+        "bookings",
+        "uq_booking_eventseat",
+        "idx_bookings_event_seat",
+        "event_seat_id",
+    )
 
     cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME='payments' AND COLUMN_NAME='razorpay_order_id'", (settings.MYSQL_DATABASE,))
     if cursor.fetchone()[0] == 0:
