@@ -7,44 +7,38 @@ const API_BASE_URL = configuredApiUrl
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 })
 
-// Add token to requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+    if (token) config.headers.Authorization = `Bearer ${token}`
     return config
   },
   (error) => Promise.reject(error),
 )
 
-// Handle response errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && !error.config?.url?.startsWith('/auth/login')) {
       localStorage.removeItem('token')
+      localStorage.removeItem('userRole')
       window.location.href = '/login'
     }
     return Promise.reject(error)
   },
 )
 
-// Auth APIs
 export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
   refresh: () => api.post('/auth/refresh'),
   me: () => api.get('/auth/me'),
+  updateProfile: (data) => api.put('/auth/profile', data),
 }
 
-// Events APIs
 export const eventsAPI = {
   getAll: (params) => api.get('/events', { params }),
   getById: (id) => api.get(`/events/${id}`),
@@ -53,7 +47,6 @@ export const eventsAPI = {
   delete: (id) => api.delete(`/events/${id}`),
 }
 
-// Venues APIs
 export const venuesAPI = {
   getAll: (params) => api.get('/venues', { params }),
   getById: (id) => api.get(`/venues/${id}`),
@@ -62,7 +55,6 @@ export const venuesAPI = {
   delete: (id) => api.delete(`/venues/${id}`),
 }
 
-// Seats APIs
 export const seatsAPI = {
   getAll: (params) => api.get('/seats', { params }),
   getById: (id) => api.get(`/seats/${id}`),
@@ -72,7 +64,6 @@ export const seatsAPI = {
   delete: (id) => api.delete(`/seats/${id}`),
 }
 
-// Event Seats APIs
 export const eventSeatsAPI = {
   getByEvent: (eventId) => api.get(`/event-seats/event/${eventId}`),
   getAvailableByEvent: (eventId) => api.get(`/event-seats/event/${eventId}/available`),
@@ -80,7 +71,6 @@ export const eventSeatsAPI = {
   generate: (eventId, price) => api.post(`/event-seats/event/${eventId}/generate`, null, { params: { price } }),
 }
 
-// Bookings APIs
 export const bookingsAPI = {
   getAll: (params) => api.get('/bookings', { params }),
   getMy: (params) => api.get('/bookings/my', { params }),
@@ -90,7 +80,6 @@ export const bookingsAPI = {
   cancel: (id) => api.delete(`/bookings/${id}`),
 }
 
-// Payments APIs
 export const paymentsAPI = {
   getById: (id) => api.get(`/payments/${id}`),
   createOrder: (data) => api.post('/payments/order', data),
@@ -98,7 +87,6 @@ export const paymentsAPI = {
   getByBooking: (bookingId) => api.get(`/payments/booking/${bookingId}`),
 }
 
-// Seat Locks APIs
 export const seatLocksAPI = {
   create: (data) => api.post('/seat-locks', data),
   delete: (id) => api.delete(`/seat-locks/${id}`),
