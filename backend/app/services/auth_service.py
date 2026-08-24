@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from pwdlib import PasswordHash
 from jose import jwt
 from config import settings
@@ -66,9 +68,12 @@ def authenticate_user(db, email: str, password: str):
 
 
 def create_access_token(user_id: int, role: str):
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
-        "role": role
+        "role": role,
+        "iat": now,
+        "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     }
 
     return jwt.encode(
