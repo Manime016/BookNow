@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { CreditCard, Lock, ArrowLeft } from 'lucide-react'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { bookingsAPI, paymentsAPI, eventSeatsAPI, eventsAPI } from '../services/api'
+import { bookingsAPI, paymentsAPI, eventSeatsAPI, eventsAPI, authAPI } from '../services/api'
 import { formatPrice, formatDate } from '../utils/helpers'
 import toast from 'react-hot-toast'
 
@@ -14,7 +14,7 @@ function loadRazorpay() {
     const existing = document.querySelector('script[data-razorpay-checkout]')
     if (existing) {
       existing.addEventListener('load', () => resolve(true), { once: true })
-      existing.addEventListener('error', reject, { once: true })
+      existing.addEventListener('error', () => reject(new Error('Razorpay checkout could not be loaded')), { once: true })
       return
     }
     const script = document.createElement('script')
@@ -33,18 +33,23 @@ export default function Checkout() {
   const [booking, setBooking] = useState(null)
   const [eventSeat, setEventSeat] = useState(null)
   const [event, setEvent] = useState(null)
+  const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
 
   useEffect(() => {
     const fetchCheckoutData = async () => {
       try {
-        const bookingRes = await bookingsAPI.getById(bookingId)
+        const [bookingRes, userRes] = await Promise.all([
+          bookingsAPI.getById(bookingId),
+          authAPI.me(),
+        ])
         const seatRes = await eventSeatsAPI.getById(bookingRes.data.event_seat_id)
         const eventRes = await eventsAPI.getById(seatRes.data.event_id)
         setBooking(bookingRes.data)
         setEventSeat(seatRes.data)
         setEvent(eventRes.data)
+        setUser(userRes.data)
       } catch (error) {
         toast.error(error.response?.data?.detail || 'Failed to load booking details')
         navigate('/events')
@@ -62,7 +67,11 @@ export default function Checkout() {
     try {
       setProcessing(true)
       await loadRazorpay()
+
       const { data: order } = await paymentsAPI.createOrder({ booking_id: Number(bookingId) })
+      if (!order?.razorpay_order_id || !order?.razorpay_key_id) {
+        throw new Error('Payment order was not created correctly. Please try again.')
+      }
 
       const razorpay = new window.Razorpay({
         key: order.razorpay_key_id,
@@ -72,7 +81,9 @@ export default function Checkout() {
         name: 'BookNow',
         description: `Booking #${bookingId} - ${event?.title || 'Event ticket'}`,
         prefill: {
-          email: undefined,
+          name: user?.full_name || '',
+          email: user?.email || '',
+          contact: user?.phone || '',
         },
         theme: { color: '#0ea5e9' },
         handler: async (response) => {
@@ -81,6 +92,7 @@ export default function Checkout() {
             toast.success('Payment successful! Your ticket is confirmed.')
             navigate('/dashboard')
           } catch (error) {
+            console.error('Payment verification failed:', error)
             toast.error(error.response?.data?.detail || 'Payment verification failed')
           } finally {
             setProcessing(false)
@@ -88,8 +100,16 @@ export default function Checkout() {
         },
         modal: { ondismiss: () => setProcessing(false) },
       })
+
+      razorpay.on('payment.failed', (response) => {
+        console.error('Razorpay payment failed:', response?.error)
+        setProcessing(false)
+        toast.error(response?.error?.description || 'Payment failed. Please try again.')
+      })
+
       razorpay.open()
     } catch (error) {
+      console.error('Unable to start payment:', error)
       setProcessing(false)
       toast.error(error.response?.data?.detail || error.message || 'Unable to start payment')
     }
