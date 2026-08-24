@@ -6,12 +6,24 @@ import { useAuthStore } from '../../store/store'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import toast from 'react-hot-toast'
 
+const SETTINGS_KEY = 'booknow_admin_settings'
+const DEFAULT_SETTINGS = { bookingAlerts: true, paymentAlerts: true }
+
+const readSettings = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')
+    return { ...DEFAULT_SETTINGS, ...saved }
+  } catch {
+    return DEFAULT_SETTINGS
+  }
+}
+
 export default function AdminSettings() {
   const { user, setUser } = useAuthStore()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ full_name: '', phone: '' })
-  const [notifications, setNotifications] = useState({ bookingAlerts: true, paymentAlerts: true })
+  const [notifications, setNotifications] = useState(readSettings)
 
   useEffect(() => {
     let cancelled = false
@@ -29,6 +41,13 @@ export default function AdminSettings() {
       })
     return () => { cancelled = true }
   }, [setUser])
+
+  const handleNotificationChange = (name, checked) => {
+    const next = { ...notifications, [name]: checked }
+    setNotifications(next)
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
+    toast.success(`${name === 'bookingAlerts' ? 'Booking' : 'Payment'} alerts ${checked ? 'enabled' : 'disabled'}`)
+  }
 
   const handleSave = async (event) => {
     event.preventDefault()
@@ -71,7 +90,7 @@ export default function AdminSettings() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="font-bold mb-4 flex items-center gap-2"><Lock className="w-5 h-5 text-gray-500" />Security</h3>
               <p className="text-sm text-gray-600">Your account uses the same secure authentication system as customer accounts.</p>
-              <p className="text-xs text-gray-500 mt-3">Password changes are intentionally not exposed here until a dedicated password-reset endpoint is available.</p>
+              <p className="text-xs text-gray-500 mt-3">Password changes require a dedicated password-reset endpoint and are not exposed here.</p>
             </div>
           </div>
 
@@ -103,14 +122,14 @@ export default function AdminSettings() {
               <h2 className="text-xl font-bold mb-5 flex items-center gap-2"><Bell className="w-5 h-5 text-gray-500" />Notifications</h2>
               <div className="space-y-4">
                 <label className="flex items-center justify-between gap-4 cursor-pointer">
-                  <div><p className="font-semibold">Booking alerts</p><p className="text-sm text-gray-500">Show booking-related notifications in the admin interface.</p></div>
-                  <input type="checkbox" checked={notifications.bookingAlerts} onChange={(e) => setNotifications({ ...notifications, bookingAlerts: e.target.checked })} className="w-5 h-5" />
+                  <div><p className="font-semibold">Booking alerts</p><p className="text-sm text-gray-500">Show booking-related alerts on the admin dashboard.</p></div>
+                  <input type="checkbox" checked={notifications.bookingAlerts} onChange={(e) => handleNotificationChange('bookingAlerts', e.target.checked)} className="w-5 h-5" />
                 </label>
                 <label className="flex items-center justify-between gap-4 cursor-pointer">
-                  <div><p className="font-semibold">Payment alerts</p><p className="text-sm text-gray-500">Show payment-related notifications in the admin interface.</p></div>
-                  <input type="checkbox" checked={notifications.paymentAlerts} onChange={(e) => setNotifications({ ...notifications, paymentAlerts: e.target.checked })} className="w-5 h-5" />
+                  <div><p className="font-semibold">Payment alerts</p><p className="text-sm text-gray-500">Show payment-related alerts on the admin dashboard.</p></div>
+                  <input type="checkbox" checked={notifications.paymentAlerts} onChange={(e) => handleNotificationChange('paymentAlerts', e.target.checked)} className="w-5 h-5" />
                 </label>
-                <p className="text-xs text-gray-500 pt-2 border-t border-gray-100">Notification preferences are currently stored for this browser only; no backend notification service exists yet.</p>
+                <p className="text-xs text-gray-500 pt-2 border-t border-gray-100">These preferences are saved in this browser and immediately affect the admin dashboard.</p>
               </div>
             </div>
           </div>
