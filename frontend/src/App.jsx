@@ -62,13 +62,22 @@ export default function App() {
       setAuthLoading(false)
       return
     }
+
     authAPI.me()
       .then((response) => setUser(response.data))
       .catch(() => logout())
       .finally(() => setAuthLoading(false))
   }, [isAuthenticated, user, setUser, logout])
 
-  if (authLoading) return <div className="min-h-screen bg-gray-50" />
+  if (authLoading) {
+    return (
+      <div className="app-loading" role="status" aria-live="polite">
+        <div className="app-loading__spinner" />
+        <span>Loading BookNow…</span>
+      </div>
+    )
+  }
+
   const isAdmin = isAuthenticated && user?.role === 'admin'
 
   return (
@@ -79,7 +88,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
       ) : (
-        <div className="flex flex-col min-h-screen bg-gray-50">
+        <div className="flex min-h-screen flex-col bg-gray-50">
           <Navbar />
           <main className="flex-grow">
             <Routes>
@@ -98,7 +107,7 @@ export default function App() {
           <Footer />
         </div>
       )}
-      <Toaster position="top-right" />
+      <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
     </BrowserRouter>
   )
 }
