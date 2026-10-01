@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Menu, X, LogOut, Settings, Ticket } from 'lucide-react'
+import { Menu, X, LogOut, Ticket } from 'lucide-react'
 import { useAuthStore } from '../store/store'
 import AdminSidebar from './AdminSidebar'
 
@@ -16,53 +16,48 @@ export default function AdminLayout({ children }) {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
       <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-4">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <button
+              type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-gray-100 rounded-lg"
+              className="rounded-lg p-2 transition-colors hover:bg-gray-100"
+              aria-label={sidebarOpen ? 'Close admin navigation' : 'Open admin navigation'}
+              aria-expanded={sidebarOpen}
             >
-              {sidebarOpen ? (
-                <X className="w-6 h-6 text-gray-600" />
-              ) : (
-                <Menu className="w-6 h-6 text-gray-600" />
-              )}
+              {sidebarOpen ? <X className="h-6 w-6 text-gray-600" /> : <Menu className="h-6 w-6 text-gray-600" />}
             </button>
-            <Link to="/admin" className="flex items-center space-x-2">
-              <div className="bg-gradient-to-r from-primary-600 to-secondary-600 p-2 rounded-lg">
-                <Ticket className="w-5 h-5 text-white" />
+
+            <Link to="/admin" className="flex items-center gap-2">
+              <div className="rounded-lg bg-gradient-to-r from-primary-600 to-secondary-600 p-2">
+                <Ticket className="h-5 w-5 text-white" />
               </div>
-              <span className="font-bold text-lg text-gradient hidden sm:inline">BookNow Admin</span>
+              <span className="hidden text-lg font-bold text-gradient sm:inline">BookNow Admin</span>
             </Link>
           </div>
 
-          {/* User Info */}
-          <div className="flex items-center space-x-4">
-            <div className="text-right hidden sm:block">
-              <p className="font-semibold text-gray-900">{user?.full_name}</p>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="hidden text-right sm:block">
+              <p className="font-semibold text-gray-900">{user?.full_name || 'Administrator'}</p>
               <p className="text-sm text-gray-600">Administrator</p>
             </div>
             <button
+              type="button"
               onClick={handleLogout}
-              className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
+              className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50"
               title="Logout"
+              aria-label="Logout"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="h-5 w-5" />
             </button>
           </div>
         </header>
 
-        {/* Content Area */}
         <main className="flex-1 overflow-auto">
-          <div className="p-6">
-            {children}
-          </div>
+          <div className="p-4 sm:p-6">{children}</div>
         </main>
       </div>
     </div>
