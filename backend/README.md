@@ -1,283 +1,150 @@
-# BookNow Backend API
+# BookNow Backend
 
-A FastAPI-based backend for the BookNow event ticketing and booking platform. This API handles user authentication, event management, seat allocation, bookings, and payment processing.
+FastAPI backend for an event-ticket booking system. The backend focuses on authenticated users, event and venue management, per-event seat inventory, temporary seat locks, bookings, and payment verification.
 
-## Overview
+## Stack
 
-The BookNow backend is built with:
-- **FastAPI** - Modern, fast web framework for building APIs
-- **SQLAlchemy** - SQL toolkit and ORM
-- **Alembic** - Database migration tool
-- **PostgreSQL** - Relational database
-- **JWT** - JSON Web Token authentication
-- **Pydantic** - Data validation using Python type annotations
+- Python 3.11+
+- FastAPI + Uvicorn
+- SQLAlchemy ORM
+- MySQL
+- Alembic migrations
+- Pydantic / pydantic-settings
+- JWT authentication
+- Argon2 password hashing via `pwdlib`
+- Razorpay payment integration
+- pytest
+- Docker
 
-## Project Structure
+## Architecture
 
-```
+```text
 backend/
 ├── app/
-│   ├── main.py              # FastAPI application entry point
-│   ├── db.py                # Database connection and setup
-│   ├── config.py            # Configuration management
-│   ├── dependencies.py      # Dependency injection
-│   ├── models/              # SQLAlchemy ORM models
-│   │   ├── user.py
-│   │   ├── event.py
-│   │   ├── venue.py
-│   │   ├── seat.py
-│   │   ├── booking.py
-│   │   ├── payment.py
-│   │   ├── event_seat.py
-│   │   └── seat_lock.py
-│   ├── routes/              # API route handlers
-│   │   ├── auth.py
-│   │   ├── events.py
-│   │   ├── venues.py
-│   │   ├── seats.py
-│   │   ├── bookings.py
-│   │   ├── payments.py
-│   │   ├── event_seats.py
-│   │   └── seat_locks.py
-│   ├── schemas/             # Pydantic request/response schemas
-│   │   ├── user_schema.py
-│   │   ├── event_schema.py
-│   │   ├── venue_schema.py
-│   │   ├── seat_schema.py
-│   │   ├── booking_schema.py
-│   │   ├── payment_schema.py
-│   │   ├── event_seat_schema.py
-│   │   └── seat_lock_schema.py
-│   └── services/            # Business logic services
-│       ├── auth_service.py
-│       ├── event_service.py
-│       ├── venue_service.py
-│       ├── seats_service.py
-│       ├── bookings_service.py
-│       ├── payments_service.py
-│       ├── event_seats_service.py
-│       ├── seat_locks_service.py
-│       └── notification_service.py
-├── migrations/              # Alembic database migrations
-├── tests/                   # Test files
-├── requirements.txt         # Python dependencies
-├── config.py               # Environment and app configuration
-├── Dockerfile              # Docker image configuration
-└── alembic.ini            # Alembic configuration
+│   ├── models/       # SQLAlchemy models
+│   ├── schemas/      # Request/response validation
+│   ├── routes/       # HTTP endpoints
+│   └── services/     # Business rules and workflows
+├── migrations/       # Alembic migrations
+├── tests/            # Automated tests
+├── config.py         # Environment-backed settings
+├── seed_admin.py     # Development admin bootstrap
+├── Dockerfile
+└── requirements.txt
 ```
 
-## Setup Instructions
+HTTP handling, validation, persistence and business logic are separated so booking and payment workflows remain easier to test and maintain.
 
-### Prerequisites
-- Python 3.8+
-- PostgreSQL 12+
-- pip (Python package manager)
+## Booking Flow
 
-### Installation
+```text
+Select event/seat
+      ↓
+Temporary seat lock
+      ↓
+Create pending booking
+      ↓
+Create payment order
+      ↓
+Verify payment with provider
+      ↓
+Confirm booking
+      ↓
+Mark seat sold
+```
 
-1. **Navigate to the backend directory:**
-   ```bash
-   cd backend
-   ```
+Seat locks are temporary. Failed or expired checkout must not leave inventory permanently unavailable.
 
-2. **Create a virtual environment:**
-   ```bash
-   python -m venv venv
-   ```
+## Payment Safety
 
-3. **Activate the virtual environment:**
-   
-   **Windows:**
-   ```bash
-   .\venv\Scripts\Activate.ps1
-   ```
-   
-   **macOS/Linux:**
-   ```bash
-   source venv/bin/activate
-   ```
+Payment confirmation verifies the provider response before a booking is finalized. The workflow checks the payment signature, provider-side payment/order information, expected amount and repeated-callback/idempotency conditions.
 
-4. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+Never put Razorpay credentials, database passwords or JWT secrets in source control. Use `.env` locally and deployment environment variables in production.
 
-5. **Set up environment variables:**
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Edit `.env` with your configuration (database credentials, JWT secret, etc.)
+## Configuration
 
-6. **Run database migrations:**
-   ```bash
-   alembic upgrade head
-   ```
+Create `backend/.env` from `backend/.env.example` and provide your own values.
 
-## Running the Application
+```text
+MYSQL_HOST
+MYSQL_PORT
+MYSQL_USER
+MYSQL_PASSWORD
+MYSQL_DATABASE
+MYSQL_SSL_CA
+SECRET_KEY
+RAZORPAY_KEY_ID
+RAZORPAY_KEY_SECRET
+ACCESS_TOKEN_EXPIRE_MINUTES
+```
 
-### Start the Development Server
+`MYSQL_SSL_CA` is optional for local MySQL and should point to a trusted CA file when the hosted database requires TLS.
+
+## Run Locally
+
+From `backend/`:
+
+```bash
+python -m venv .venv
+```
+
+Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+macOS/Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run migrations:
+
+```bash
+alembic upgrade head
+```
+
+Start the API:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-The API will be available at `http://localhost:8000`
+API documentation is available at `/docs` and `/redoc`.
 
-### API Documentation
-
-- **Swagger UI:** http://localhost:8000/docs
-- **ReDoc:** http://localhost:8000/redoc
-
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login user
-- `POST /api/auth/refresh` - Refresh JWT token
-
-### Events
-- `GET /api/events` - List all events
-- `GET /api/events/{event_id}` - Get event details
-- `POST /api/events` - Create new event (admin)
-- `PUT /api/events/{event_id}` - Update event (admin)
-- `DELETE /api/events/{event_id}` - Delete event (admin)
-
-### Venues
-- `GET /api/venues` - List all venues
-- `GET /api/venues/{venue_id}` - Get venue details
-- `POST /api/venues` - Create new venue (admin)
-- `PUT /api/venues/{venue_id}` - Update venue (admin)
-- `DELETE /api/venues/{venue_id}` - Delete venue (admin)
-
-### Seats
-- `GET /api/seats/{event_id}` - Get seats for an event
-- `GET /api/seats/{seat_id}` - Get seat details
-- `POST /api/seats` - Create seat (admin)
-
-### Bookings
-- `GET /api/bookings` - List user's bookings
-- `POST /api/bookings` - Create new booking
-- `GET /api/bookings/{booking_id}` - Get booking details
-- `DELETE /api/bookings/{booking_id}` - Cancel booking
-
-### Payments
-- `POST /api/payments` - Process payment
-- `GET /api/payments/{payment_id}` - Get payment details
-- `GET /api/payments/booking/{booking_id}` - Get payments for booking
-
-### Seat Locks
-- `POST /api/seat-locks` - Lock seats during checkout
-- `DELETE /api/seat-locks/{lock_id}` - Release seat lock
-
-### Event Seats
-- `GET /api/event-seats/{event_id}` - Get seat status for event
-- `GET /api/event-seats/{event_seat_id}` - Get event seat details
-
-## Database
-
-### Connection
-
-Database configuration is managed through environment variables. The application uses SQLAlchemy with SQLAlchemy's connection pooling.
-
-### Migrations
-
-Database schema changes are managed using Alembic:
+## Tests
 
 ```bash
-# Create a new migration
-alembic revision --autogenerate -m "Description of changes"
-
-# Apply pending migrations
-alembic upgrade head
-
-# Rollback to previous migration
-alembic downgrade -1
+pytest
 ```
 
-See [migrations/README.md](./migrations/README.md) for more details.
-
-## Services
-
-Services contain the business logic for each feature:
-
-- **auth_service.py** - User authentication and JWT token management
-- **event_service.py** - Event management and queries
-- **venue_service.py** - Venue management
-- **seats_service.py** - Seat management
-- **bookings_service.py** - Booking creation and management
-- **payments_service.py** - Payment processing
-- **event_seats_service.py** - Event-specific seat management
-- **seat_locks_service.py** - Temporary seat locking during checkout
-- **notification_service.py** - Email and notification sending
-
-## Testing
-
-Run tests using pytest:
+With coverage:
 
 ```bash
-pytest tests/
-```
-
-Run with coverage:
-
-```bash
-pytest --cov=app tests/
+pytest --cov=app
 ```
 
 ## Docker
 
-### Build the Docker Image
+From the repository root:
 
 ```bash
-docker build -t booknow-backend .
+docker build -t booknow-backend ./backend
+docker run --env-file backend/.env -p 8000:8000 booknow-backend
 ```
 
-### Run with Docker Compose
+## Engineering Focus
 
-```bash
-docker-compose up -d
-```
+This project is intentionally backend-focused. The main engineering problems are transactional booking workflows, inventory consistency, authentication, payment verification, database migrations and testable service-layer logic.
 
-This will start:
-- The FastAPI backend service
-- A PostgreSQL database
-- Any other services defined in docker-compose.yml
+## Production Notes
 
-## Environment Variables
-
-See `.env.example` for all available configuration options. Key variables:
-
-- `DATABASE_URL` - PostgreSQL connection string
-- `SECRET_KEY` - JWT secret key for token signing
-- `JWT_ALGORITHM` - Algorithm for JWT encoding (default: HS256)
-- `ACCESS_TOKEN_EXPIRE_MINUTES` - Token expiration time
-- `DEBUG` - Enable debug mode
-
-## Troubleshooting
-
-### Database Connection Issues
-- Verify PostgreSQL is running
-- Check `DATABASE_URL` in `.env`
-- Ensure database exists and credentials are correct
-
-### Migration Issues
-- Check Alembic configuration in `alembic.ini`
-- Verify all models are imported in migration scripts
-- Review migration files in `migrations/versions/`
-
-### Import Errors
-- Ensure virtual environment is activated
-- Run `pip install -r requirements.txt`
-- Check Python path and PYTHONPATH environment variable
-
-## Contributing
-
-1. Create a feature branch
-2. Make your changes
-3. Run tests to ensure everything passes
-4. Submit a pull request
-
-## License
-
-See LICENSE file for details.
+For a real deployment, use managed secrets, HTTPS, restricted CORS, payment-provider webhooks where appropriate, structured logging, monitoring and database backups.
