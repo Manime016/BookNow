@@ -1,142 +1,69 @@
-# BookNow — Event Ticket Booking Platform
+# BookNow
 
-BookNow is a full-stack event ticket booking application with a React frontend and a FastAPI backend. The backend uses SQLAlchemy and PostgreSQL and implements authentication, event/venue management, seat allocation, temporary seat locking, bookings, and Razorpay payment processing.
+Backend-focused event ticket booking platform built with **FastAPI and MySQL**, with a React client for demonstration.
 
-## Backend Stack
+The project is designed around the backend problems that matter in a booking system: authentication, event and venue management, event-specific seat inventory, temporary seat locks, booking state transitions and payment verification.
 
-- Python
-- FastAPI
+## Backend
+
+- Python + FastAPI
 - SQLAlchemy
-- PostgreSQL
+- MySQL
 - Alembic
-- Pydantic
+- Pydantic / pydantic-settings
 - JWT authentication
-- Razorpay
-- Docker
+- Argon2 password hashing
+- Razorpay integration
 - pytest
+- Docker
 
-## Core Booking Flow
+## Booking Workflow
 
 ```text
-Browse Event
-    ↓
-Select Seat
-    ↓
-Temporary Seat Lock
-    ↓
-Create Pending Booking
-    ↓
-Create Razorpay Order
-    ↓
-Payment Verification
-    ↓
-Confirm Booking
-    ↓
-Mark Seat Sold
+Browse event → Select seat → Temporary lock → Pending booking
+→ Payment order → Provider verification → Confirm booking → Seat sold
 ```
 
-Seat locks expire after a fixed period. Expired locks can be released so reserved seats return to the available pool.
+Temporary locks prevent an in-progress checkout from permanently consuming inventory. Payment confirmation is separated from initial booking creation so the backend can validate the provider response before marking the booking complete.
 
-## Main Features
-
-- User registration and JWT authentication
-- Event and venue management
-- Event-specific seat inventory
-- Temporary seat locking during checkout
-- Booking creation and cancellation
-- Razorpay payment integration
-- Payment signature and provider-side verification
-- Payment amount validation
-- Idempotent payment verification
-- Admin booking/status management
-- PostgreSQL persistence with SQLAlchemy
-- Alembic database migrations
-- Dockerized backend
-
-## Project Structure
+## Repository Layout
 
 ```text
 BookNow/
-├── backend/
-│   ├── app/
-│   │   ├── models/       # SQLAlchemy models
-│   │   ├── schemas/      # Pydantic schemas
-│   │   ├── routes/       # API endpoints
-│   │   ├── services/     # Business logic
-│   │   ├── db.py         # Database setup
-│   │   └── main.py       # FastAPI application
-│   ├── migrations/       # Alembic migrations
-│   ├── tests/            # Automated tests
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── .env.example
-└── frontend/
+├── backend/      # FastAPI application and database layer
+└── frontend/     # React client used to exercise the API
 ```
+
+The backend has its own README with setup, configuration, testing and Docker instructions.
+
+## Why This Project
+
+BookNow is primarily a backend engineering project. The goal is to demonstrate API design, relational data modeling, authentication, transactional workflows, inventory consistency, payment integration, migrations and testing rather than frontend complexity.
 
 ## Running the Backend
 
 ```bash
 cd backend
-python -m venv venv
+python -m venv .venv
 ```
 
-Windows:
-
-```bash
-.\venv\Scripts\Activate.ps1
-```
-
-macOS/Linux:
-
-```bash
-source venv/bin/activate
-```
-
-Install dependencies:
+Install dependencies and configure `backend/.env` from `backend/.env.example`, then run:
 
 ```bash
 pip install -r requirements.txt
-```
-
-Create your environment file from `.env.example`, configure PostgreSQL and Razorpay credentials, then run migrations:
-
-```bash
 alembic upgrade head
-```
-
-Start FastAPI:
-
-```bash
 uvicorn app.main:app --reload
 ```
 
-API documentation is available at:
-
-- `/docs`
-- `/redoc`
+Open `/docs` for the interactive API documentation.
 
 ## Testing
 
-Run:
-
 ```bash
-pytest tests/
+cd backend
+pytest
 ```
 
-## Docker
+## Status
 
-Build the backend image:
-
-```bash
-docker build -t booknow-backend ./backend
-```
-
-## Engineering Notes
-
-The booking flow is designed around temporary seat ownership rather than immediately marking a seat as sold. A booking starts in `PENDING_PAYMENT`; the seat becomes `sold` only after successful payment verification.
-
-Payment verification checks the Razorpay signature, provider-side order/payment records, payment capture status, and the expected amount before confirming the booking. Repeated successful callbacks are handled idempotently.
-
-## License
-
-See [LICENSE](LICENSE).
+Portfolio project under active refinement. Production deployment would additionally require managed secrets, HTTPS, restricted CORS, monitoring, backups and production payment webhooks.
